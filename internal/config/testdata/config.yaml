@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+llm:
+  url: "https://api.openai.com/v1/chat/completions"
+  api_key: "test-api-key"
+
+guardrails:
+  banned_words:
+    - "bomb"
+    - "attack" 

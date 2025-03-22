@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 	"github.com/charmitro/ai_proxy/internal/config"
 	"github.com/charmitro/ai_proxy/internal/guardrails"
 	"github.com/charmitro/ai_proxy/internal/llm"
 	"github.com/charmitro/ai_proxy/internal/metrics"
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 )
 
 type queryRequest struct {
@@ -23,31 +23,8 @@ type queryResponse struct {
 	Completion string `json:"completion"`
 }
 
-func main() {
-	// Parse command line flags
-	configPath := flag.String("config", "config/config.yaml", "Path to config file")
-	flag.Parse()
-
-	// Initialize logger
-	logrus.SetFormatter(&logrus.JSONFormatter{})
-	logrus.SetLevel(logrus.InfoLevel)
-
-	// Load configuration
-	cfg, err := config.LoadConfig(*configPath)
-	if err != nil {
-		logrus.Fatalf("Failed to load configuration: %v", err)
-	}
-
-	// Initialize metrics
-	m := metrics.NewMetrics()
-
-	// Initialize guardrail
-	grd := guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords)
-
-	// Initialize LLM client
-	llmClient := llm.NewOpenAIClient(&cfg.LLM)
-
-	// Set up Gin router
+// setupRouter initializes and returns the Gin router with all routes configured
+func setupRouter(cfg *config.Config, m *metrics.Metrics, grd guardrails.Guardrail, llmClient llm.Client) *gin.Engine {
 	r := gin.Default()
 
 	// Metrics endpoint
@@ -95,6 +72,36 @@ func main() {
 			Completion: completion,
 		})
 	})
+
+	return r
+}
+
+func main() {
+	// Parse command line flags
+	configPath := flag.String("config", "config/config.yaml", "Path to config file")
+	flag.Parse()
+
+	// Initialize logger
+	logrus.SetFormatter(&logrus.JSONFormatter{})
+	logrus.SetLevel(logrus.InfoLevel)
+
+	// Load configuration
+	cfg, err := config.LoadConfig(*configPath)
+	if err != nil {
+		logrus.Fatalf("Failed to load configuration: %v", err)
+	}
+
+	// Initialize metrics
+	m := metrics.NewMetrics()
+
+	// Initialize guardrail
+	grd := guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords)
+
+	// Initialize LLM client
+	llmClient := llm.NewOpenAIClient(&cfg.LLM)
+
+	// Set up Gin router
+	r := setupRouter(cfg, m, grd, llmClient)
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
