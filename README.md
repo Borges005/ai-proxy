@@ -1,3 +1,6 @@
+> [!IMPORTANT]  
+> Vibe code experiment.
+
 # AI Proxy
 
 A lightweight proxy for LLM interactions with basic guardrails, logging, and metrics.
