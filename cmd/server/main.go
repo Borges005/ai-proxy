@@ -4,14 +4,16 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"regexp"
+	"strings"
 
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 	"github.com/charmitro/ai_proxy/internal/config"
 	"github.com/charmitro/ai_proxy/internal/guardrails"
 	"github.com/charmitro/ai_proxy/internal/llm"
 	"github.com/charmitro/ai_proxy/internal/metrics"
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
 )
 
 type queryRequest struct {
@@ -94,8 +96,119 @@ func main() {
 	// Initialize metrics
 	m := metrics.NewMetrics()
 
-	// Initialize guardrail
-	grd := guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords)
+	// Initialize guardrails
+	guardrailComponents := []guardrails.Guardrail{}
+
+	// Add banned words guardrail if configured
+	if len(cfg.Guardrails.BannedWords) > 0 {
+		guardrailComponents = append(guardrailComponents,
+			guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords))
+	}
+
+	// Add regex patterns guardrail if configured
+	if len(cfg.Guardrails.RegexPatterns) > 0 {
+		regexGuardrail, err := guardrails.NewRegexGuardrail(cfg.Guardrails.RegexPatterns)
+		if err != nil {
+			logrus.Warnf("Failed to initialize regex guardrail: %v", err)
+		} else {
+			guardrailComponents = append(guardrailComponents, regexGuardrail)
+		}
+	}
+
+	// Add custom length check guardrails if configured
+	if cfg.Guardrails.MaxPromptLength > 0 {
+		lengthCheckRule := func(content string) (bool, string) {
+			if len(content) > cfg.Guardrails.MaxPromptLength {
+				return true, fmt.Sprintf("prompt exceeds maximum length of %d characters", cfg.Guardrails.MaxPromptLength)
+			}
+			return false, ""
+		}
+
+		guardrailComponents = append(guardrailComponents,
+			guardrails.NewCustomRuleGuardrail(
+				[]guardrails.CustomRuleFunc{lengthCheckRule},
+				[]string{"prompt length check"},
+			),
+		)
+	}
+
+	// Process custom rules if configured
+	for _, ruleConfig := range cfg.Guardrails.CustomRules {
+		switch ruleConfig.Type {
+		case "word_count":
+			// Handle different numeric types for max_words parameter
+			var maxWords int
+			maxWordsParam := ruleConfig.Parameters["max_words"]
+			switch v := maxWordsParam.(type) {
+			case float64:
+				maxWords = int(v)
+			case int:
+				maxWords = v
+			case int64:
+				maxWords = int(v)
+			case float32:
+				maxWords = int(v)
+			default:
+				logrus.Warnf("Invalid max_words parameter type: %T", maxWordsParam)
+				continue
+			}
+
+			wordCountRule := func(content string) (bool, string) {
+				words := strings.Fields(content)
+				if len(words) > maxWords {
+					return true, fmt.Sprintf("text contains %d words, exceeding limit of %d", len(words), maxWords)
+				}
+				return false, ""
+			}
+
+			guardrailComponents = append(guardrailComponents,
+				guardrails.NewCustomRuleGuardrail(
+					[]guardrails.CustomRuleFunc{wordCountRule},
+					[]string{ruleConfig.Name},
+				),
+			)
+		case "contains_pattern":
+			patternParam := ruleConfig.Parameters["pattern"]
+			pattern, ok := patternParam.(string)
+			if !ok {
+				logrus.Warnf("Invalid pattern parameter type: %T", patternParam)
+				continue
+			}
+
+			patternRule := func(content string) (bool, string) {
+				matched, err := regexp.MatchString(pattern, content)
+				if err != nil {
+					logrus.Warnf("Error matching pattern: %v", err)
+					return false, ""
+				}
+				if matched {
+					return true, fmt.Sprintf("content matches forbidden pattern")
+				}
+				return false, ""
+			}
+
+			guardrailComponents = append(guardrailComponents,
+				guardrails.NewCustomRuleGuardrail(
+					[]guardrails.CustomRuleFunc{patternRule},
+					[]string{ruleConfig.Name},
+				),
+			)
+		default:
+			logrus.Warnf("Unknown custom rule type: %s", ruleConfig.Type)
+		}
+	}
+
+	// Create composite guardrail from all components
+	var grd guardrails.Guardrail
+	if len(guardrailComponents) > 0 {
+		grd = guardrails.NewCompositeGuardrail(guardrailComponents...)
+	} else {
+		// Create a default pass-through guardrail if no components configured
+		grd = &guardrails.CustomRuleGuardrail{
+			Rules: []guardrails.CustomRuleFunc{func(content string) (bool, string) { return false, "" }},
+			Names: []string{"default-passthrough"},
+		}
+	}
 
 	// Initialize LLM client
 	llmClient := llm.NewOpenAIClient(&cfg.LLM)

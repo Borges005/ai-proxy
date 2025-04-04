@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/charmitro/ai_proxy/internal/config"
 	"github.com/charmitro/ai_proxy/internal/guardrails"
 	"github.com/charmitro/ai_proxy/internal/llm"
 	"github.com/charmitro/ai_proxy/internal/metrics"
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // MockLLMClient implements the llm.Client interface
@@ -26,7 +27,7 @@ func (m *MockLLMClient) Query(prompt string, modelParams map[string]interface{})
 // testMetrics creates a metrics instance for testing
 func testMetrics() *metrics.Metrics {
 	reg := prometheus.NewRegistry()
-	
+
 	m := &metrics.Metrics{
 		LLMRequestsTotal: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "test_llm_requests_total",
@@ -45,12 +46,12 @@ func testMetrics() *metrics.Metrics {
 			Help: "Total number of requests blocked by guardrails",
 		}),
 	}
-	
+
 	reg.MustRegister(m.LLMRequestsTotal)
 	reg.MustRegister(m.LLMErrorsTotal)
 	reg.MustRegister(m.LLMTokensTotal)
 	reg.MustRegister(m.GuardrailBlocksTotal)
-	
+
 	return m
 }
 
@@ -58,30 +59,83 @@ func testMetrics() *metrics.Metrics {
 // This avoids import cycle issues
 func setupTestRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
-	
+
 	// Create test configuration
 	cfg := &config.Config{
 		Server: config.ServerConfig{Port: 8080},
-		LLM: config.LLMConfig{URL: "https://test-openai-url", APIKey: "test-key"},
-		Guardrails: config.GuardrailsConfig{BannedWords: []string{"bomb", "attack"}},
+		LLM:    config.LLMConfig{URL: "https://test-openai-url", APIKey: "test-key"},
+		Guardrails: config.GuardrailsConfig{
+			BannedWords:     []string{"bomb", "attack"},
+			RegexPatterns:   []string{"\\d{3}-\\d{2}-\\d{4}"},
+			MaxPromptLength: 100,
+			CustomRules: []config.RuleConfig{
+				{
+					Name: "Test Word Count Rule",
+					Type: "word_count",
+					Parameters: map[string]interface{}{
+						"max_words": float64(20),
+					},
+				},
+			},
+		},
 	}
-	
+
 	// Initialize metrics with test registry
 	m := testMetrics()
-	
-	// Initialize guardrail
-	grd := guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords)
-	
+
+	// Initialize guardrails
+	guardrailComponents := []guardrails.Guardrail{}
+
+	// Add banned words guardrail
+	guardrailComponents = append(guardrailComponents,
+		guardrails.NewBannedWordsGuardrail(cfg.Guardrails.BannedWords))
+
+	// Add regex patterns guardrail
+	regexGuardrail, _ := guardrails.NewRegexGuardrail(cfg.Guardrails.RegexPatterns)
+	guardrailComponents = append(guardrailComponents, regexGuardrail)
+
+	// Add max length guardrail
+	lengthRule := func(content string) (bool, string) {
+		if len(content) > cfg.Guardrails.MaxPromptLength {
+			return true, "prompt too long"
+		}
+		return false, ""
+	}
+	guardrailComponents = append(guardrailComponents,
+		guardrails.NewCustomRuleGuardrail(
+			[]guardrails.CustomRuleFunc{lengthRule},
+			[]string{"max length"},
+		),
+	)
+
+	// Add word count rule
+	wordCountRule := func(content string) (bool, string) {
+		words := len(strings.Fields(content))
+		if words > 20 {
+			return true, "too many words"
+		}
+		return false, ""
+	}
+	guardrailComponents = append(guardrailComponents,
+		guardrails.NewCustomRuleGuardrail(
+			[]guardrails.CustomRuleFunc{wordCountRule},
+			[]string{"word count"},
+		),
+	)
+
+	// Create composite guardrail
+	grd := guardrails.NewCompositeGuardrail(guardrailComponents...)
+
 	// Initialize mock LLM client
 	var llmClient llm.Client = &MockLLMClient{}
-	
+
 	// Setup router (similar to what's in cmd/server/main.go)
 	r := gin.Default()
 
 	// Create a registry for the metrics handler
 	registry := prometheus.NewRegistry()
 	handler := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
-	
+
 	// Metrics endpoint
 	r.GET("/metrics", gin.WrapH(handler))
 
@@ -96,7 +150,7 @@ func setupTestRouter() *gin.Engine {
 			Prompt      string                 `json:"prompt" binding:"required"`
 			ModelParams map[string]interface{} `json:"model_params"`
 		}
-		
+
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 			return
@@ -126,26 +180,26 @@ func setupTestRouter() *gin.Engine {
 		// Return response
 		c.JSON(http.StatusOK, gin.H{"completion": completion})
 	})
-	
+
 	return r
 }
 
 func TestHealthEndpoint(t *testing.T) {
 	router := setupTestRouter()
-	
+
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/health", nil)
 	router.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
 	}
-	
+
 	var response map[string]string
 	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 		t.Fatal("Failed to unmarshal response:", err)
 	}
-	
+
 	if response["status"] != "healthy" {
 		t.Errorf("Expected status 'healthy', got '%s'", response["status"])
 	}
@@ -153,11 +207,11 @@ func TestHealthEndpoint(t *testing.T) {
 
 func TestMetricsEndpoint(t *testing.T) {
 	router := setupTestRouter()
-	
+
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/metrics", nil)
 	router.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
 	}
@@ -165,7 +219,7 @@ func TestMetricsEndpoint(t *testing.T) {
 
 func TestQueryEndpoint(t *testing.T) {
 	router := setupTestRouter()
-	
+
 	tests := []struct {
 		name           string
 		prompt         string
@@ -184,29 +238,47 @@ func TestQueryEndpoint(t *testing.T) {
 			expectedStatus: http.StatusBadRequest,
 			expectedError:  true,
 		},
+		{
+			name:           "Regex pattern match",
+			prompt:         "My SSN is 123-45-6789",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  true,
+		},
+		{
+			name:           "Too long prompt",
+			prompt:         strings.Repeat("very long text ", 20),
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  true,
+		},
+		{
+			name:           "Too many words",
+			prompt:         "This sentence has more than twenty words so it should be rejected by our custom word count rule that we added",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  true,
+		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reqBody, _ := json.Marshal(map[string]interface{}{
 				"prompt":       tt.prompt,
 				"model_params": map[string]interface{}{},
 			})
-			
+
 			w := httptest.NewRecorder()
 			req, _ := http.NewRequest("POST", "/v1/query", bytes.NewBuffer(reqBody))
 			req.Header.Set("Content-Type", "application/json")
 			router.ServeHTTP(w, req)
-			
+
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status code %d, got %d", tt.expectedStatus, w.Code)
 			}
-			
+
 			var response map[string]interface{}
 			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
 				t.Fatal("Failed to unmarshal response:", err)
 			}
-			
+
 			if tt.expectedError {
 				if _, ok := response["error"]; !ok {
 					t.Errorf("Expected error in response, but got: %v", response)
@@ -222,18 +294,18 @@ func TestQueryEndpoint(t *testing.T) {
 
 func TestInvalidRequestBody(t *testing.T) {
 	r := setupTestRouter()
-	
+
 	// Test invalid JSON
 	req := httptest.NewRequest("POST", "/v1/query", bytes.NewBufferString("{invalid json"))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status BadRequest, got %v", w.Code)
 	}
-	
+
 	// Test missing required field
 	requestBody := map[string]interface{}{
 		"model_params": map[string]interface{}{
@@ -241,14 +313,14 @@ func TestInvalidRequestBody(t *testing.T) {
 		},
 	}
 	jsonData, _ := json.Marshal(requestBody)
-	
+
 	req = httptest.NewRequest("POST", "/v1/query", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	
+
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Expected status BadRequest, got %v", w.Code)
 	}
-} 
+}
