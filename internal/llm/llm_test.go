@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	
+
 	"github.com/charmitro/ai_proxy/internal/config"
 )
 
@@ -15,7 +15,7 @@ func TestOpenAIClient_Query(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer test-api-key" {
 			t.Errorf("Expected Authorization header with API key")
 		}
-		
+
 		// Return mock response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -41,19 +41,19 @@ func TestOpenAIClient_Query(t *testing.T) {
 		}`))
 	}))
 	defer server.Close()
-	
+
 	// Create client with test server URL
 	cfg := &config.LLMConfig{
-		URL: server.URL,
+		URL:    server.URL,
 		APIKey: "test-api-key",
 	}
 	client := NewOpenAIClient(cfg)
-	
+
 	// Test query
 	resp, tokens, err := client.Query("Test prompt", map[string]interface{}{
 		"temperature": 0.7,
 	})
-	
+
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -63,4 +63,4 @@ func TestOpenAIClient_Query(t *testing.T) {
 	if tokens != 30 {
 		t.Errorf("Expected 30 tokens, got %d", tokens)
 	}
-} 
+}

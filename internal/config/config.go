@@ -30,7 +30,18 @@ type LLMConfig struct {
 
 // GuardrailsConfig contains guardrails-related configuration
 type GuardrailsConfig struct {
-	BannedWords []string `yaml:"banned_words"`
+	BannedWords      []string     `yaml:"banned_words"`
+	RegexPatterns    []string     `yaml:"regex_patterns"`
+	CustomRules      []RuleConfig `yaml:"custom_rules"`
+	MaxContentLength int          `yaml:"max_content_length"`
+	MaxPromptLength  int          `yaml:"max_prompt_length"`
+}
+
+// RuleConfig defines a custom rule configuration
+type RuleConfig struct {
+	Name       string                 `yaml:"name"`
+	Type       string                 `yaml:"type"`
+	Parameters map[string]interface{} `yaml:"parameters"`
 }
 
 // LoadConfig loads the configuration from a file or environment variables
@@ -43,7 +54,11 @@ func LoadConfig(configPath string) (*Config, error) {
 			URL: "https://api.openai.com/v1/chat/completions",
 		},
 		Guardrails: GuardrailsConfig{
-			BannedWords: []string{},
+			BannedWords:      []string{},
+			RegexPatterns:    []string{},
+			CustomRules:      []RuleConfig{},
+			MaxContentLength: 10000, // Default maximum content length
+			MaxPromptLength:  4000,  // Default maximum prompt length
 		},
 	}
 

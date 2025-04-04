@@ -8,4 +8,16 @@ llm:
 guardrails:
   banned_words:
     - "bomb"
-    - "attack" 
+    - "attack"
+  
+  regex_patterns:
+    - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # SSN
+  
+  max_content_length: 8000
+  max_prompt_length: 2000
+  
+  custom_rules:
+    - name: "Test Rule"
+      type: "word_count"
+      parameters:
+        max_words: 500

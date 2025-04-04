@@ -6,6 +6,31 @@ llm:
   api_key: "YOUR_OPENAI_API_KEY"
 
 guardrails:
+  # Basic banned words filtering
   banned_words:
     - "bomb"
-    - "attack" 
+    - "attack"
+    - "weapon"
+    - "terrorist"
+  
+  # Regex pattern filtering for sensitive information
+  regex_patterns:
+    - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # US Social Security Numbers
+    - "\\b\\d{16}\\b"             # Credit card numbers (simplified)
+    - "\\b(?:[0-9A-Fa-f]{2}[:-]){5}(?:[0-9A-Fa-f]{2})\\b"  # MAC addresses
+  
+  # Length limitations
+  max_content_length: 10000
+  max_prompt_length: 4000
+  
+  # Custom rules with configuration
+  custom_rules:
+    - name: "Max Words"
+      type: "word_count"
+      parameters:
+        max_words: 1000
+    
+    - name: "PII Detection" 
+      type: "contains_pattern"
+      parameters:
+        pattern: "(passport|ssn|social security|credit card)"

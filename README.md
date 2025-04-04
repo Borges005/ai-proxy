@@ -5,7 +5,11 @@ A lightweight proxy for LLM interactions with basic guardrails, logging, and met
 ## Features
 
 - Single LLM provider support (OpenAI)
-- Basic guardrail for banned words
+- Enhanced guardrails system:
+  - Banned words filtering
+  - Regex pattern matching
+  - Content length limits
+  - Custom filtering rules (word count, pattern detection, etc.)
 - Logging of requests and responses
 - Prometheus metrics
 - Config-driven setup
@@ -27,17 +31,46 @@ llm:
   api_key: "YOUR_OPENAI_API_KEY"
 
 guardrails:
+  # Basic banned words filtering
   banned_words:
     - "bomb"
     - "attack"
+    - "weapon"
+    - "terrorist"
+  
+  # Regex pattern filtering for sensitive information
+  regex_patterns:
+    - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # US Social Security Numbers
+    - "\\b\\d{16}\\b"               # Credit card numbers (simplified)
+  
+  # Length limitations
+  max_content_length: 10000
+  max_prompt_length: 4000
+  
+  # Custom rules with configuration
+  custom_rules:
+    - name: "Max Words"
+      type: "word_count"
+      parameters:
+        max_words: 1000
+    
+    - name: "PII Detection" 
+      type: "contains_pattern"
+      parameters:
+        pattern: "(passport|ssn|social security|credit card)"
 ```
 
 ### Environment Variables
+
+Configuration via environment variables is supported for basic settings:
 
 - `SERVER_PORT`: Server port (default: 8080)
 - `LLM_URL`: LLM API endpoint URL
 - `LLM_API_KEY`: LLM API key
 - `BANNED_WORDS`: Comma-separated list of banned words
+
+For advanced guardrail configuration, it's recommended to use the config file approach.
+Complex configurations like regex patterns and custom rules are better defined in the YAML config file.
 
 ## API
 
@@ -138,20 +171,77 @@ curl -X POST http://localhost:8080/v1/query \
 curl http://localhost:8080/metrics
 ```
 
+## Guardrail Types
+
+The AI Proxy supports multiple types of guardrails that can be combined:
+
+### 1. Banned Words Guardrail
+
+This guardrail blocks requests containing specified banned words.
+
+```yaml
+banned_words:
+  - "dangerous_word1"
+  - "dangerous_word2"
+```
+
+### 2. Regex Pattern Guardrail
+
+This guardrail uses regular expressions to block content matching specified patterns. Useful for detecting structured sensitive information like SSNs or credit cards.
+
+```yaml
+regex_patterns:
+  - "\\b\\d{3}-\\d{2}-\\d{4}\\b"  # SSN pattern
+```
+
+### 3. Content Length Guardrails
+
+Limits the maximum length of prompts and completions.
+
+```yaml
+max_content_length: 10000
+max_prompt_length: 4000
+```
+
+### 4. Custom Rule Guardrails
+
+Allows for configurable rules using predefined types. Each rule type supports specific parameters and type validation:
+
+#### Word Count Rule
+
+```yaml
+custom_rules:
+  - name: "Max Words"
+    type: "word_count"
+    parameters:
+      max_words: 1000
+```
+
+#### Pattern Detection Rule
+
+```yaml
+custom_rules:
+  - name: "PII Detection" 
+    type: "contains_pattern"
+    parameters:
+      pattern: "(passport|ssn|social security|credit card)"  # Regular expression pattern
+```
+
+The pattern parameter must be a valid regular expression. Invalid regex patterns will be logged as warnings and skipped.
+
 ## Potential Enhancements
 
-This MVP focuses on core functionality. Some possible future enhancements could include:
+Some possible future enhancements could include:
 
-1. **Enhanced Guardrails**  
-   - More sophisticated content filtering options
-   - Support for custom filtering rules
+1. **Additional LLM Support**  
+   - Integration with other LLM providers (Anthropic Claude, Google Gemini, etc.)
 
-2. **Additional LLM Support**  
-   - Integration with other LLM providers
-
-3. **Simple Authentication**  
+2. **Authentication & Security**  
+   - API key authentication
    - Basic rate limiting
+   - Request validation
 
-4. **Performance Improvements**  
+3. **Performance Improvements**  
    - Optional caching for common queries
    - Optimizations for high-traffic scenarios
+   - Load balancing across multiple LLM providers
